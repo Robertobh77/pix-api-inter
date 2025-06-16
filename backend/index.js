@@ -1,5 +1,5 @@
-// index.js atualizado com log detalhado
-const express = require('express');
+// index.js atualizado com log detalhado e comentário para forçar rebuild
+const express = require('express'); // forçando redeploy para atualizar o Render
 const fs = require('fs');
 const https = require('https');
 const axios = require('axios');         
@@ -40,7 +40,6 @@ app.post('/cobranca', async (req, res) => {
     });
 
     const token = responseToken.data.access_token;
-
     const { txid, nome, valor } = req.body;
 
     const responseCobranca = await axios.put(
@@ -71,7 +70,12 @@ app.post('/cobranca', async (req, res) => {
       qr_code: qr_code
     });
   } catch (error) {
-    console.error('Erro ao criar cobrança:', error.response?.data || error.message);
+    console.error('Erro ao criar cobrança Pix:', {
+      data: error.response?.data,
+      status: error.response?.status,
+      headers: error.response?.headers,
+      message: error.message
+    });
     res.status(500).json({ erro: 'Erro ao criar cobrança Pix' });
   }
 });
