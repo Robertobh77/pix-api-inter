@@ -1,87 +1,82 @@
 const express = require('express');
-const fs = require('fs');
-const https = require('https');
 const axios = require('axios');
-const path = require('path');
-const bodyParser = require('body-parser');
+const https = require('https');
+const fs = require('fs');
 require('dotenv').config();
 
 const app = express();
-app.use(bodyParser.json());
+app.use(express.json());
 
-app.get('/', (req, res) => {
-    res.send('API Pix Inter está online');
+const certificado = fs.readFileSync('./certs/certificado.pem');
+const chave = fs.readFileSync('./certs/chave.pem');
+
+const httpsAgent = new https.Agent({
+  cert: certificado,
+  key: chave,
+  rejectUnauthorized: false
 });
+
+let accessToken = null;
+
+async function gerarAccessToken() {
+  const auth = Buffer.from(`${process.env.CLIENT_ID}:${process.env.CLIENT_SECRET}`).toString('base64');
+  const response = await axios({
+    method: 'POST',
+    url: 'https://cdpj.partners.bancointer.com.br/oauth/v2/token',
+    data: 'grant_type=client_credentials',
+    httpsAgent,
+    headers: {
+      Authorization: `Basic ${auth}`,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    }
+  });
+  return response.data.access_token;
+}
 
 app.post('/cobranca', async (req, res) => {
   try {
-    const certificado = fs.readFileSync(path.join(__dirname, 'certificados', 'certificado.crt'));
-    const chave = fs.readFileSync(path.join(__dirname, 'certificados', 'chave.key'));
-
-    const httpsAgent = new https.Agent({
-      cert: certificado,
-      key: chave
-    });
-
-    const responseToken = await axios.post('https://cdpj.partners.bancointer.com.br/oauth/v2/token', null, {
-      httpsAgent,
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      auth: {
-        username: process.env.CLIENT_ID,
-        password: process.env.CLIENT_SECRET
-      },
-      params: {
-        grant_type: 'client_credentials',
-        scope: 'cob.write'
-      }
-    });
-
-    const token = responseToken.data.access_token;
-
     const { txid, nome, cpf, valor } = req.body;
 
-    const responseCobranca = await axios.put(
-      `https://cdpj.partners.bancointer.com.br/pix/v2/cob/${txid}`,
-      {
-        calendario: { expiracao: 3600 },
-        devedor: { nome, cpf },
-        valor: { original: valor.toFixed(2) },
-        chave: process.env.CHAVE_PIX,
-        solicitacaoPagador: 'Pagamento do pedido.'
+    if (!accessToken) {
+      accessToken = await gerarAccessToken();
+    }
+
+    const data = {
+      calendario: { expiracao: 3600 },
+      devedor: { cpf, nome },
+      valor: { original: valor.toFixed(2) },
+      chave: process.env.CHAVE_PIX,
+      solicitacaoPagador: 'Pagamento da cobranca'
+    };
+
+    const response = await axios({
+      method: 'PUT',
+      url: `https://cdpj.partners.bancointer.com.br/pix/v2/cob/${txid}`,
+      httpsAgent,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
       },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        httpsAgent
+      data
+    });
+
+    const responseQr = await axios({
+      method: 'GET',
+      url: `https://cdpj.partners.bancointer.com.br/pix/v2/loc/${response.data.loc.id}/qrcode`,
+      httpsAgent,
+      headers: {
+        Authorization: `Bearer ${accessToken}`
       }
-    );
-
-    const { loc } = responseCobranca.data;
-
-    const responseQRCode = await axios.get(
-      `https://cdpj.partners.bancointer.com.br/pix/v2/loc/${loc.id}/qrcode`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
-        httpsAgent
-      }
-    );
-
-    const { imagemQrcode, qrcode } = responseQRCode.data;
+    });
 
     res.json({
       txid,
       nome,
       cpf,
       valor,
-      url: loc.location,
-      copia_e_cola: qrcode,
-      imagem_qrcode: imagemQrcode
+      url: response.data.loc.location,
+      qr_code: responseQr.data.qrcode,
+      imagem_qr_code: responseQr.data.imagemQrcode
     });
   } catch (error) {
     console.error('Erro ao criar cobrança Pix:', error.response?.data || error.message);
@@ -89,7 +84,7 @@ app.post('/cobranca', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`API Pix Inter rodando na porta ${PORT}`);
 });
