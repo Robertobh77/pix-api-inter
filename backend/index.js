@@ -1,5 +1,5 @@
-// index.js atualizado com log detalhado e comentário para forçar rebuild
-const express = require('express'); // forçando redeploy para atualizar o Render
+// index.js atualizado com correção no campo valor.original como string
+const express = require('express');
 const fs = require('fs');
 const https = require('https');
 const axios = require('axios');         
@@ -40,6 +40,7 @@ app.post('/cobranca', async (req, res) => {
     });
 
     const token = responseToken.data.access_token;
+
     const { txid, nome, valor } = req.body;
 
     const responseCobranca = await axios.put(
@@ -47,7 +48,7 @@ app.post('/cobranca', async (req, res) => {
       {
         calendario: { expiracao: 3600 },
         devedor: { nome },
-        valor: { original: valor.toFixed(2) },
+        valor: { original: String(parseFloat(valor).toFixed(2)) },
         chave: process.env.CHAVE_PIX,
         solicitacaoPagador: 'Pagamento do pedido.'
       },
