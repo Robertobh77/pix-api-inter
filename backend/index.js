@@ -1,5 +1,5 @@
-// index.js atualizado com log expandido para mostrar violacoes
-const express = require('express'); // forçando redeploy para atualizar o Render
+// index.js atualizado com devedor.cpf obrigatório
+const express = require('express'); // forçando redeploy para CPF obrigatório
 const fs = require('fs');
 const https = require('https');
 const axios = require('axios');         
@@ -41,13 +41,16 @@ app.post('/cobranca', async (req, res) => {
 
     const token = responseToken.data.access_token;
 
-    const { txid, nome, valor } = req.body;
+    const { txid, nome, cpf, valor } = req.body;
 
     const responseCobranca = await axios.put(
       `https://cdpj.partners.bancointer.com.br/pix/v2/cob/${txid}`,
       {
         calendario: { expiracao: 3600 },
-        devedor: { nome },
+        devedor: {
+          nome,
+          cpf
+        },
         valor: { original: String(parseFloat(valor).toFixed(2)) },
         chave: process.env.CHAVE_PIX,
         solicitacaoPagador: 'Pagamento do pedido.'
@@ -66,6 +69,7 @@ app.post('/cobranca', async (req, res) => {
     res.json({
       txid,
       nome,
+      cpf,
       valor,
       url: loc.location,
       qr_code: qr_code
@@ -81,3 +85,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`API Pix Inter rodando na porta ${PORT}`);
 });
+
