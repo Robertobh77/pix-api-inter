@@ -1,5 +1,5 @@
-// index.js atualizado com correção no campo valor.original como string
-const express = require('express');
+// index.js atualizado com log expandido para mostrar violacoes
+const express = require('express'); // forçando redeploy para atualizar o Render
 const fs = require('fs');
 const https = require('https');
 const axios = require('axios');         
@@ -71,12 +71,8 @@ app.post('/cobranca', async (req, res) => {
       qr_code: qr_code
     });
   } catch (error) {
-    console.error('Erro ao criar cobrança Pix:', {
-      data: error.response?.data,
-      status: error.response?.status,
-      headers: error.response?.headers,
-      message: error.message
-    });
+    console.error('Erro ao criar cobrança Pix:');
+    console.dir(error.response?.data, { depth: null });
     res.status(500).json({ erro: 'Erro ao criar cobrança Pix' });
   }
 });
