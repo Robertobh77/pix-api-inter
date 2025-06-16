@@ -1,9 +1,8 @@
-// index.js atualizado com devedor.cpf obrigatório
-const express = require('express'); // forçando redeploy para CPF obrigatório
+const express = require('express');
 const fs = require('fs');
 const https = require('https');
-const axios = require('axios');         
-const path = require('path');           
+const axios = require('axios');
+const path = require('path');
 const bodyParser = require('body-parser');
 require('dotenv').config();
 
@@ -47,11 +46,8 @@ app.post('/cobranca', async (req, res) => {
       `https://cdpj.partners.bancointer.com.br/pix/v2/cob/${txid}`,
       {
         calendario: { expiracao: 3600 },
-        devedor: {
-          nome,
-          cpf
-        },
-        valor: { original: String(parseFloat(valor).toFixed(2)) },
+        devedor: { nome, cpf },
+        valor: { original: valor.toFixed(2) },
         chave: process.env.CHAVE_PIX,
         solicitacaoPagador: 'Pagamento do pedido.'
       },
@@ -64,7 +60,19 @@ app.post('/cobranca', async (req, res) => {
       }
     );
 
-    const { loc, qr_code } = responseCobranca.data;
+    const { loc } = responseCobranca.data;
+
+    const responseQRCode = await axios.get(
+      `https://cdpj.partners.bancointer.com.br/pix/v2/loc/${loc.id}/qrcode`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        httpsAgent
+      }
+    );
+
+    const { imagemQrcode, qrcode } = responseQRCode.data;
 
     res.json({
       txid,
@@ -72,11 +80,11 @@ app.post('/cobranca', async (req, res) => {
       cpf,
       valor,
       url: loc.location,
-      qr_code: qr_code
+      copia_e_cola: qrcode,
+      imagem_qrcode: imagemQrcode
     });
   } catch (error) {
-    console.error('Erro ao criar cobrança Pix:');
-    console.dir(error.response?.data, { depth: null });
+    console.error('Erro ao criar cobrança Pix:', error.response?.data || error.message);
     res.status(500).json({ erro: 'Erro ao criar cobrança Pix' });
   }
 });
@@ -85,4 +93,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`API Pix Inter rodando na porta ${PORT}`);
 });
-
