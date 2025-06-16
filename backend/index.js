@@ -15,16 +15,76 @@ app.get('/', (req, res) => {
     res.send('API Pix Inter está online');
 });
 
-app.post('/cobranca', (req, res) => {
-    res.json({
-        txid: req.body.txid || 'simulado',
-        nome: req.body.nome || 'Cliente',
-        valor: req.body.valor || 0,
-        url: 'https://qrcode.simulado/pix=123abc',
-        qr_code: '000201....52040000...'
+app.post('/cobranca', async (req, res) => {
+  try {
+    const { txid, nome, valor } = req.body;
+
+    const certificado = fs.readFileSync(path.join(__dirname, 'certificados', 'certificado.crt'));
+    const chave = fs.readFileSync(path.join(__dirname, 'certificados', 'chave.key'));
+
+    const httpsAgent = new https.Agent({
+      cert: certificado,
+      key: chave
     });
-});
-app.get('/token', async (req, res) => {
+
+    const tokenResponse = await axios.post('https://cdpj.partners.bancointer.com.br/oauth/v2/token', null, {
+      httpsAgent,
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      auth: {
+        username: process.env.CLIENT_ID,
+        password: process.env.CLIENT_SECRET
+      },
+      params: {
+        grant_type: 'client_credentials',
+        scope: 'cob.write cob.read pix.read pix.write'
+      }
+    });
+
+    const token = tokenResponse.data.access_token;
+
+    const response = await axios.put(
+      `https://cdpj.partners.bancointer.com.br/pix/v2/cob/${txid}`,
+      {
+        calendario: { expiracao: 3600 },
+        devedor: { nome },
+        valor: { original: valor.toFixed(2) },
+        chave: process.env.PIX_KEY,
+        solicitacaoPagador: 'Pagamento gerado via API Pix'
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        httpsAgent
+      }
+    );
+
+    const location = response.data.loc.id;
+
+    const qrcodeResponse = await axios.get(
+      `https://cdpj.partners.bancointer.com.br/pix/v2/loc/${location}/qrcode`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        httpsAgent
+      }
+    );
+
+    res.json({
+      txid,
+      nome,
+      valor,
+      url: qrcodeResponse.data.imagemQrcode,
+      qr_code: qrcodeResponse.data.qrcode
+    });
+
+  } catch (error) {
+    console.error('Erro ao criar cobrança:', error.response?.data || error.message);
+    res.status(500).json({ erro: 'Erro ao criar cobrança Pix' });
+  }
+});app.get('/token', async (req, res) => {
   try {
     const certificado = fs.readFileSync(path.join(__dirname, 'certificados', 'certificado.crt'));
     const chave = fs.readFileSync(path.join(__dirname, 'certificados', 'chave.key'));
