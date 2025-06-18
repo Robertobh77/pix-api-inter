@@ -32,9 +32,6 @@ async function gerarAccessToken() {
 app.post('/cobranca', async (req, res) => {
   try {
     const { txid, nome, cpf, valor } = req.body;
-    if (!txid || !nome || !cpf || !valor) {
-      return res.status(400).json({ erro: 'Campos obrigatórios faltando' });
-    }
 
     if (!accessToken) {
       accessToken = await gerarAccessToken();
@@ -43,7 +40,7 @@ app.post('/cobranca', async (req, res) => {
     const data = {
       calendario: { expiracao: 3600 },
       devedor: { cpf, nome },
-      valor: { original: Number(valor).toFixed(2) },
+      valor: { original: valor.toFixed(2) },
       chave: process.env.CHAVE_PIX,
       solicitacaoPagador: 'Pagamento da cobranca'
     };
