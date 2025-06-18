@@ -1,18 +1,14 @@
 const express = require('express');
 const axios = require('axios');
 const https = require('https');
-const fs = require('fs');
 require('dotenv').config();
 
 const app = express();
 app.use(express.json());
 
-const certificado = fs.readFileSync('./certs/certificado.pem');
-const chave = fs.readFileSync('./certs/chave.pem');
-
 const httpsAgent = new https.Agent({
-  cert: certificado,
-  key: chave,
+  cert: process.env.CERT_PEM.replace(/\\n/g, '\n'),
+  key: process.env.KEY_PEM.replace(/\\n/g, '\n'),
   rejectUnauthorized: false
 });
 
